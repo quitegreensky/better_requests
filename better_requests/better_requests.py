@@ -1,6 +1,8 @@
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import os
+import time
 
 """
 Example:
@@ -16,40 +18,46 @@ class BetterRequests:
         super().__init__(*args, **kw)
 
     def get(self, *args, **kwargs):
-        try:
-            return self._session.get(*args, **kwargs)
-        except Exception as e:
-            self.last_error = repr(e)
-            return None
+        return self.request("get", *args, **kwargs)
 
     def post(self, *args, **kwargs):
-        try:
-            return self._session.post(*args, **kwargs)
-        except Exception as e:
-            self.last_error = repr(e)
-            return None
+        return self.request("post", *args, **kwargs)
 
-    def session(
-        self,
-        retries=3,
-        backoff_factor=0.3,
-        status_forcelist=(500, 502, 504),
-        session=None,
-        proxies = {},
+    def request(self, method,  *args, retry_sleep=1, retries=5, **kw):
+        _tries = 0
+
+        PREFIX = "BETTER_REQUESTS_"
+
+        proxies = {}
+        proxy_env = os.environ.get(f"{PREFIX}PROXY")
+        proxies_kw = kw.get("proxies")
+        kw.pop("proxies", None)
+        if proxy_env:
+            proxies = {
+                "http": proxy_env,
+                "https": proxy_env
+            }
+        if proxies_kw:
+            proxies = proxies_kw
+
         timeout = 10
-    ):
-        session = session or requests.Session()
-        retry = Retry(
-            total=retries,
-            read=retries,
-            connect=retries,
-            backoff_factor=backoff_factor,
-            status_forcelist=status_forcelist,
-        )
-        adapter = HTTPAdapter(max_retries=retry)
-        session.mount('http://', adapter)
-        session.mount('https://', adapter)
-        session.proxies = proxies
-        session.timeout = timeout
-        self._session = session
-        return True
+        timeout_env = os.environ.get(f"{PREFIX}TIMEOUT")
+        timeout_kw = kw.get("timeout")
+        kw.pop("timeout", None)
+        if timeout_env:
+            timeout = timeout_env
+        if timeout_kw:
+            timeout = timeout_kw
+
+        retries_env = os.environ.get(f"{PREFIX}RETRIES")
+        if retries_env:
+            retries = retries_env
+        while _tries < retries :
+            try:
+                response = requests.request(method, *args, timeout=timeout, proxies=proxies, **kw)
+                return response
+            except Exception as e:
+                time.sleep(retry_sleep)
+                _tries+=1
+                continue
+        return None

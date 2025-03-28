@@ -1,4 +1,4 @@
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 __description__ = 'python requests with retry and proxy support'
 __author__= "Unknown"
 __email__="Unknown@gmail.com"
